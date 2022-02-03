@@ -1,52 +1,149 @@
-// File:          meu_controle_final.cpp
-// Date:
-// Description:
-// Author:
-// Modifications:
+/* O Objetivo desse arquivo é usar as funcoes principais 
+ * para o robo andar, ele basicamente faz a calibração e poe o robo para seguir a 
+ * linha usando os PIDs
+ */
+#define TIMESTEP 3
 
-// You may need to add webots include files such as
-// <webots/DistanceSensor.hpp>, <webots/Motor.hpp>, etc.
-// and/or to add some other includes
-#include <webots/Robot.hpp>
+#include "../../libraries/definicao.hpp"
+#include "../../libraries/key.hpp"
+#include "../../libraries/mapeamento.hpp"
+#include "../../libraries/motors.hpp"
+#include "../../libraries/irsensors.hpp"
 
-// All the webots classes are defined in the "webots" namespace
 using namespace webots;
+using namespace std;
 
-// This is the main program of your controller.
-// It creates an instance of your Robot instance, launches its
-// function(s) and destroys it at the end of the execution.
-// Note that only one instance of Robot should be created in
-// a controller program.
-// The arguments of the main function can be specified by the
-// "controllerArgs" field of the Robot node
-int main(int argc, char **argv) {
-  // create the Robot instance.
-  Robot *robot = new Robot();
+bool readRight();
+bool readLeft();
 
-  // get the time step of the current world.
-  int timeStep = (int)robot->getBasicTimeStep();
+int main(int argc, char **argv)
+{
 
-  // You should insert a getDevice-like function in order to get the
-  // instance of a device of the robot. Something like:
-  //  Motor *motor = robot->getMotor("motorname");
-  //  DistanceSensor *ds = robot->getDistanceSensor("dsname");
-  //  ds->enable(timeStep);
+  initTime(robot, TIMESTEP);
+  initMappingVector();
+  initConstants();
+  initKey();
 
-  // Main loop:
-  // - perform simulation steps until Webots is stopping the controller
-  while (robot->step(timeStep) != -1) {
-    // Read the sensors:
-    // Enter here functions to read sensor data, like:
-    //  double val = ds->getValue();
+  // definição dos motores
+  motor_left->setPosition(INFINITY);
+  motor_right->setPosition(INFINITY);
+  // double value_left, value_right;
+  motor_left->setVelocity(linear);
+  motor_right->setVelocity(-linear); 
 
-    // Process sensor data here.
+  Presto->resetPhysics();
 
-    // Enter here functions to send actuator commands, like:
-    //  motor->setPosition(10.0);
-  };
+  while (robot->step(TIMESTEP) != -1)
+  {
 
-  // Enter here exit cleanup code.
+    //Calibrando todos os sensores durante 11s
+    double time = robot->getTime();
 
+    while (time <  11)// CALIBRAÇÃO
+    {
+      robot->step(TIMESTEP);
+      right_sensor.calibrateSensors(time);
+      left_right_sensor.calibrateSensors(time);
+      left_left_sensor.calibrateSensors(time);
+      frontal_sensors.calibrateSensors(time);
+
+      time = robot->getTime();
+    }
+    cout << "Fim da calibração" << endl; 
+
+    vector<IrSensor> sensor_vector = {frontal_sensors, right_sensor, left_right_sensor, left_left_sensor};
+    // Escrita da calibração no txt
+    fstream calibracaoTxt("Calibracao.txt");
+    calibracaoTxt << "Calibracao dos sensores";
+
+    for (int i=0; i<4; i++)
+    {
+      calibracaoTxt<<endl <<endl << "Sensor "<< sensor_name[i] <<endl;
+      calibracaoTxt <<"Maximo: " <<endl;
+    
+      for (int j=0; j < sensor_vector[i].qtde_sensores; j++)
+      {
+        calibracaoTxt << sensor_vector[i].maximo[j] << ", ";
+      }
+      calibracaoTxt<<endl << endl << "Minimo: " <<endl;
+      for (int j=0; j < sensor_vector[i].qtde_sensores; j++)
+      {
+        cout << "minimos: " << sensor_vector[i].minimo[j] << endl;
+        calibracaoTxt << sensor_vector[i].minimo[j]  << ", ";
+      }
+    }
+
+    motor_left->setVelocity(0);
+    motor_right->setVelocity(0); 
+    linear = 18;
+
+    double erro, input_pid, erro_linear, vel_medida;
+    bool freada_final = false;
+    double marcacao = 0;
+
+    bool seguir = true;
+    while (seguir)
+    { 
+      robot->step(TIMESTEP);
+      key = kb.getKey();
+
+      erro = frontal_sensors.readLine();
+      input_pid = (erro - 3500)/3500;  //pq 3.500????
+      PID(input_pid, &main_loop);
+      vel_medida = abs(encoders.getVelocity());
+      erro_linear = linear - vel_medida;
+  
+      if (vel_medida < 50 and vel_medida > 0)
+        PID(erro_linear, &vel_linear);
+      else
+       cout << "vel_medida: " << vel_medida << endl;
+
+      moveSimple(main_loop.output, vel_linear.output, motor_left, motor_right);
+
+      double leitura_dir = right_sensor.readCalibrated();
+      
+      double giro_esq_atual = encoders.getValueLeft();
+      double giro_dir_atual = encoders.getValueRight();
+      
+      double leitura_esq_dir = left_right_sensor.readCalibrated();
+      double leitura_esq_esq = left_left_sensor.readCalibrated();
+      
+      bool val_read_left = readLeft(giro_esq_atual, giro_dir_atual, leitura_esq_dir, leitura_esq_esq, mapping_path);
+      bool val_read_right = readRight(giro_esq_atual, giro_dir_atual, leitura_dir, mapping_path);
+
+      mappingPath(giro_esq_atual, giro_dir_atual, val_read_left || val_read_right);
+
+      if (diff_counter_total > COMPRIMENTO_PISTA and mapping_path >= 32 and mapeando)
+      { 
+        cout << "diff_counter_total: " << diff_counter_total << endl;
+        printAllValues();
+        motor_left->setVelocity(0);
+        motor_right->setVelocity(0);
+        atualizarMapeamento();     
+        writeTxt(mapping_path);
+        mapeando = false;
+        mapping_path = 0;
+        delay(2);
+      }
+
+      if (mapeando == false and val_read_left and mapping_path > 32) //mudar esse 32 para uma macro
+      {
+        marcacao = diff_counter_total;
+        freada_final = true;
+      }
+
+      if (freada_final and (diff_counter_total - marcacao) > 50)
+      {
+        motor_left->setVelocity(0);
+        motor_right->setVelocity(0);
+        seguir = false;
+        robot->step(TIMESTEP);
+        delay(2);
+      }
+      corr_diff_counter = diff_counter_total;
+      readKey();
+      }
   delete robot;
   return 0;
+  }  
 }
