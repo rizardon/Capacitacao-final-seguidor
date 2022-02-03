@@ -22,17 +22,18 @@ using namespace std;
 // fazer dois vetores que guardem a distância entre dois pontos
 double left_encoder_values[TAMANHO_VETORES];
 double right_encoder_values[TAMANHO_VETORES];
-double dist_values[TAMANHO_VETORES];
-unsigned long time_values[TAMANHO_VETORES]; // Coloca o tempo gasto em cada trecho
+//double dist_values[TAMANHO_VETORES];  provavelmente vai sair
+double diff_left_value, left_last_value, diff_right_value, right_last_value, diff_counter_total = 0, corr_diff_counter = 0;
 
-double diff_left_value, left_value, left_last_value, diff_right_value, right_value, right_last_value, diff_counter_total = 0, corr_diff_counter = 0;
-unsigned long last_time_value = 0, diff_time; 
+//unsigned long time_values[TAMANHO_VETORES]; // Coloca o tempo gasto em cada trecho -- essa variavel não é usada
+//double left_value, right_value;  essas variáveis não são usadas
+//unsigned long last_time_value = 0, diff_time;  essas variáveis não são usadas
 
 string path_txt = "Mapeamento.txt";
 string titulos[3] = {"Meus multiplicadores: ", "Velocidade fim do trecho: ", "Comprimento trecho: "};
 double *vetores[3];
 
-string mapping_data;
+//string mapping_data;  essa variável não é usada
 double posicao_atual;
 bool mapeando = false;
 
@@ -105,65 +106,66 @@ void mappingPath(double v_encoder_left, double v_encoder_right, bool marca)
 void printAllValues()
 {
     // foi tirado um looping que passava a variável left_encoder_values[] e right_encoder_values[] para um vetor que era usado apenas nessa função
-    int posicao;
-    string mapping;
+    //string mapping;  essa variável não é usada
+    int trecho_pista;
 
     cout << "Resultados \nEncoder esquerdo: [" ;
     
-    for (int i = 0; i < mapping_path; ++i)
+    for (trecho_pista = 0; trecho_pista < mapping_path; ++trecho_pista)
     {        
-        cout << left_encoder_values[posicao] << ", ";
+        cout << left_encoder_values[trecho_pista] << ", ";
     }
     cout << "]\nEncoder direito: [" ;
     
-    for (int i = 0; i < mapping_path; ++i)
+    for (trecho_pista = 0; trecho_pista < mapping_path; ++trecho_pista)
     {
-        cout <<  right_encoder_values[posicao] << ", " ;
+        cout <<  right_encoder_values[trecho_pista] << ", " ;
     }
     cout << "]\n";
 }
 
 // atualiza o mapeamento com os multiplicadores
-void atualizarMapeamento() //falta essa funcao
+void atualizarMapeamento() 
 {
     float r = 100.0;
     float d = 10.0;
-    double razao_multiplicador = (r+d)/(r-d);
+    double razao_multiplicador = (r+d)/(r-d); //valor de referência(n sei pq é esse)
 
-    for (int i = 0 ; i <= mapping_path ; i++)
+    for (int trecho_atual = 0 ; trecho_atual <= mapping_path ; trecho_atual++)  //mudei o nome dessa variável para ficar mais claro
     {
-        int p_atual = i;
-        float valor_esquerda = left_encoder_values[p_atual];
-        float valor_direita = right_encoder_values[p_atual];
-        float minimo_atual = min(valor_esquerda , valor_direita);
-        float minimo_futuro = min(left_encoder_values[p_atual+1] , right_encoder_values[p_atual+1]);
+        // exclui duas variaveis que estavam redundantes e implementei novas para facilitar o entendimento
+        float minimo_atual = min(left_encoder_values[trecho_atual] , right_encoder_values[trecho_atual]);
+        float maximo_atual = max(left_encoder_values[trecho_atual] , right_encoder_values[trecho_atual]);
+        float minimo_futuro = min(left_encoder_values[trecho_atual+1] , right_encoder_values[trecho_atual+1]);
+        float maximo_futuro = max(left_encoder_values[trecho_atual+1] , right_encoder_values[trecho_atual+1]);
         
         if (minimo_atual == 0)
-            minimo_atual = max(valor_esquerda, valor_direita)/2; 
+            minimo_atual = maximo_atual/2; 
         if (minimo_futuro == 0)
-            minimo_futuro = max(left_encoder_values[p_atual+1] , right_encoder_values[p_atual+1])/2; 
+            minimo_futuro = maximo_futuro/2; 
 
-        float razao_atual = max(valor_esquerda , valor_direita) / minimo_atual;
-        float razao_futura = max(left_encoder_values[p_atual+1] , right_encoder_values[p_atual+1]) / minimo_futuro;
-        
-        //Comprimento da pista
-        comprimento_trecho[p_atual] = (valor_esquerda  + valor_direita) / 2;
+        float razao_atual = maximo_atual / minimo_atual;
+        float razao_futura = maximo_futuro / minimo_futuro;
 
         //Os multiplicadores
-        if(razao_atual < razao_multiplicador)
-            meus_multiplicadores[p_atual] = PWM_MAX;
+        if(razao_atual < razao_multiplicador)  //falta melhorar essa parte !!!!
+            meus_multiplicadores[trecho_atual] = PWM_MAX;
         else
-            meus_multiplicadores[p_atual] = 1;
-            //Melhorar esse if com varios multiplicadores (0.2 0.5 0.7 1 1.5 etc)
-            //Criar uma variavel para esse '1'
+            meus_multiplicadores[trecho_atual] = 1; 
+            //Melhorar esse if com varios multiplicadores (0.2 0.5 0.7 1 1.5 etc) -- isso precisaria de testes
+            //Criar uma variavel ou macro para esse '1'
 
         //Velocidade para acabar o trecho
         if(razao_atual < razao_multiplicador && razao_futura > razao_multiplicador)
-            velocidade_fim_trecho[p_atual] = VELOCIDADE_FREAR;
+            velocidade_fim_trecho[trecho_atual] = VELOCIDADE_FREAR;
         else
-            velocidade_fim_trecho[p_atual] = 1;
+            velocidade_fim_trecho[trecho_atual] = 1;
 
-        cout << p_atual << " ==> Comprimento do trecho: " << comprimento_trecho[p_atual] << "   |   Multiplicador: " << meus_multiplicadores[p_atual] << "   |   Velocidade para acabar: " << velocidade_fim_trecho[p_atual] << endl;
+        //Comprimento da pista
+        comprimento_trecho[trecho_atual] = (left_encoder_values[trecho_atual]  + right_encoder_values[trecho_atual]) / 2;    
+
+        //printa os valores achados
+        cout << trecho_atual << " ==> Comprimento do trecho: " << comprimento_trecho[trecho_atual] << "   |   Multiplicador: " << meus_multiplicadores[trecho_atual] << "   |   Velocidade para acabar: " << velocidade_fim_trecho[trecho_atual] << endl;
     }
 };
 
