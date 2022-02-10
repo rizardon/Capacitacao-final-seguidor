@@ -16,6 +16,7 @@ using namespace webots;
 using namespace std;
 
 #define PWM_MAX 2.5
+#define VELOCIDADE_NORMAL 1  //isso é novo
 #define VELOCIDADE_FREAR 0.5
 #define TAMANHO_VETORES 32
 
@@ -151,15 +152,14 @@ void atualizarMapeamento()
         if(razao_atual < razao_multiplicador)  //falta melhorar essa parte !!!!
             meus_multiplicadores[trecho_atual] = PWM_MAX;
         else
-            meus_multiplicadores[trecho_atual] = 1; 
+            meus_multiplicadores[trecho_atual] = VELOCIDADE_NORMAL; 
             //Melhorar esse if com varios multiplicadores (0.2 0.5 0.7 1 1.5 etc) -- isso precisaria de testes
-            //Criar uma variavel ou macro para esse '1'
 
         //Velocidade para acabar o trecho
         if(razao_atual < razao_multiplicador && razao_futura > razao_multiplicador)
             velocidade_fim_trecho[trecho_atual] = VELOCIDADE_FREAR;
         else
-            velocidade_fim_trecho[trecho_atual] = 1;
+            velocidade_fim_trecho[trecho_atual] = VELOCIDADE_NORMAL;
 
         //Comprimento da pista
         comprimento_trecho[trecho_atual] = (left_encoder_values[trecho_atual]  + right_encoder_values[trecho_atual]) / 2;    
